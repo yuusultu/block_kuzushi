@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ゆうすちゃんブロック崩し</title>
+    <title>ブロック崩し - 速度補正版</title>
     <style>
         body { background-color: #222; color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 20px; }
         canvas { 
@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>ゆうすちゃんブロック崩し</h1>
+    <h1>ブロック崩し</h1>
     <canvas id="gameCanvas" width="500" height="700"></canvas>
     <button id="restartBtn">やり直す</button>
 
@@ -27,10 +27,10 @@
         const img1 = new Image(); img2 = new Image(); img3 = new Image();
         img1.src = 'img_01.png'; img2.src = 'img_02.png'; img3.src = 'img_03.png';
 
-        let lives, gameState, paddle, balls, blocks, items, activeBlocks, lastItemSpawnTime, effects;
+        let lives, gameState, paddle, balls, blocks, items, activeBlocks, lastItemSpawnTime, effects, lastTime;
         const paddleBaseWidth = 90;
 
-        function initBall() { balls = [{ x: 250, y: 650, radius: 7, dx: 1.5, dy: -1.5 }]; }
+        function initBall() { balls = [{ x: 250, y: 650, radius: 7, dx: 3, dy: -3 }]; }
 
         function resetGame() {
             lives = 2; gameState = "START";
@@ -38,6 +38,7 @@
             initBall();
             items = []; lastItemSpawnTime = Date.now();
             effects = { expandEndTime: 0, penetrateEndTime: 0, rainbowEndTime: 0 };
+            lastTime = Date.now();
             
             blocks = []; activeBlocks = 0;
             for(let c=0; c<14; c++) {
@@ -72,8 +73,11 @@
         btn.onclick = resetGame;
 
         function draw() {
-            ctx.clearRect(0, 0, 500, 700);
             let now = Date.now();
+            let deltaTime = (now - lastTime) / 16.67; 
+            lastTime = now;
+
+            ctx.clearRect(0, 0, 500, 700);
 
             ctx.drawImage(img1, 0, 0, 500, 600);
             blocks.forEach(col => col.forEach(b => {
@@ -99,11 +103,11 @@
                 }
 
                 items.forEach((it, i) => {
-                    if(gameState==="PLAYING") it.y += it.dy;
+                    if(gameState==="PLAYING") it.y += it.dy * deltaTime;
                     ctx.beginPath(); ctx.arc(it.x, it.y, it.radius, 0, Math.PI*2);
                     ctx.fillStyle = it.type === 'RAINBOW' ? `hsl(${(now/10)%360},100%,50%)` : it.color;
                     ctx.fill(); ctx.fillStyle="white"; ctx.textAlign="center"; ctx.fillText(it.label, it.x, it.y+5);
-                    if(it.y+15 >= paddle.y && it.x >= paddle.x && it.x <= paddle.x + paddle.width) {
+                    if(it.y + it.radius >= paddle.y && it.x >= paddle.x && it.x <= paddle.x + paddle.width) {
                         if(it.type === 'MULTIPLY') balls.forEach(b => balls.push({x:b.x, y:b.y, radius:7, dx:-b.dx, dy:b.dy}));
                         else if(it.type === 'EXPAND') effects.expandEndTime = now + 60000;
                         else if(it.type === 'PENETRATE') effects.penetrateEndTime = now + 30000;
@@ -114,7 +118,8 @@
 
                 balls.forEach((b, i) => {
                     if(gameState==="PLAYING") {
-                        b.x += b.dx; b.y += b.dy;
+                        b.x += b.dx * deltaTime; 
+                        b.y += b.dy * deltaTime;
                         if(b.x < 7 || b.x > 493) b.dx *= -1;
                         if(b.y < 7) b.dy *= -1;
                         if(b.y > paddle.y - 7 && b.x > paddle.x && b.x < paddle.x + paddle.width) { b.dy = -Math.abs(b.dy); b.y = paddle.y - 7; }
@@ -135,8 +140,8 @@
                 ctx.fillText("HP: " + lives, 20, 30); ctx.textAlign = "right";
                 ctx.fillText("残りブロック: " + activeBlocks, 480, 30);
                 
-                if(keys.right && paddle.x < 500-paddle.width) paddle.x += paddle.dx;
-                if(keys.left && paddle.x > 0) paddle.x -= paddle.dx;
+                if(keys.right && paddle.x < 500-paddle.width) paddle.x += 7 * deltaTime;
+                if(keys.left && paddle.x > 0) paddle.x -= 7 * deltaTime;
                 if(gameState==="PLAYING" && now - lastItemSpawnTime > 20000) { 
                     const types = [
                         { type: 'MULTIPLY', color: '#00BFFF', label: '倍' }, { type: 'MULTIPLY', color: '#00BFFF', label: '倍' },
