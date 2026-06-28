@@ -2,11 +2,15 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ゆうすちゃんブロック崩し</title>
     <style>
         body { background-color: #222; color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 20px; }
-        canvas { background-color: #000; border: 2px solid #555; box-shadow: 0 0 10px rgba(0,0,0,0.5); display: block; margin: 0 auto; cursor: none; }
+        canvas { 
+            background-color: #000; border: 2px solid #555; box-shadow: 0 0 10px rgba(0,0,0,0.5); 
+            display: block; margin: 0 auto; cursor: none; touch-action: none; 
+            max-width: 100%; height: auto; 
+        }
         #restartBtn { display: none; position: absolute; top: 550px; left: 50%; transform: translateX(-50%); padding: 10px 20px; font-size: 20px; cursor: pointer; }
     </style>
 </head>
@@ -44,14 +48,7 @@
         }
         resetGame();
 
-        function spawnItem() {
-            const types = [
-                { type: 'MULTIPLY', color: '#00BFFF', label: '倍' }, { type: 'MULTIPLY', color: '#00BFFF', label: '倍' },
-                { type: 'EXPAND', color: '#32CD32', label: '拡' }, { type: 'PENETRATE', color: '#FF4500', label: '貫' }, { type: 'RAINBOW', color: 'pink', label: '虹' }
-            ];
-            items.push({ x: Math.random() * 460 + 20, y: 0, radius: 15, dy: 2, ...types[Math.floor(Math.random() * types.length)] });
-        }
-
+        // 操作：キーボード
         let keys = { left: false, right: false };
         document.addEventListener("keydown", (e) => {
             if(e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = true;
@@ -62,6 +59,16 @@
             if(e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = false;
             if(e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = false;
         });
+
+        // 操作：スマホ（タッチ）
+        canvas.addEventListener("touchmove", (e) => {
+            let rect = canvas.getBoundingClientRect();
+            let touchX = e.touches[0].clientX - rect.left;
+            paddle.x = (touchX / rect.width) * 500 - paddle.width / 2;
+            if(gameState === "START") { gameState = "PLAYING"; lastItemSpawnTime = Date.now(); }
+            e.preventDefault();
+        }, { passive: false });
+
         btn.onclick = resetGame;
 
         function draw() {
@@ -96,9 +103,7 @@
                     ctx.beginPath(); ctx.arc(it.x, it.y, it.radius, 0, Math.PI*2);
                     ctx.fillStyle = it.type === 'RAINBOW' ? `hsl(${(now/10)%360},100%,50%)` : it.color;
                     ctx.fill(); ctx.fillStyle="white"; ctx.textAlign="center"; ctx.fillText(it.label, it.x, it.y+5);
-                    
-                    // 修正：パドルとの衝突判定をより厳密に
-                    if(it.y + it.radius >= paddle.y && it.x >= paddle.x && it.x <= paddle.x + paddle.width) {
+                    if(it.y+15 >= paddle.y && it.x >= paddle.x && it.x <= paddle.x + paddle.width) {
                         if(it.type === 'MULTIPLY') balls.forEach(b => balls.push({x:b.x, y:b.y, radius:7, dx:-b.dx, dy:b.dy}));
                         else if(it.type === 'EXPAND') effects.expandEndTime = now + 60000;
                         else if(it.type === 'PENETRATE') effects.penetrateEndTime = now + 30000;
@@ -132,7 +137,14 @@
                 
                 if(keys.right && paddle.x < 500-paddle.width) paddle.x += paddle.dx;
                 if(keys.left && paddle.x > 0) paddle.x -= paddle.dx;
-                if(gameState==="PLAYING" && now - lastItemSpawnTime > 20000) { spawnItem(); lastItemSpawnTime = now; }
+                if(gameState==="PLAYING" && now - lastItemSpawnTime > 20000) { 
+                    const types = [
+                        { type: 'MULTIPLY', color: '#00BFFF', label: '倍' }, { type: 'MULTIPLY', color: '#00BFFF', label: '倍' },
+                        { type: 'EXPAND', color: '#32CD32', label: '拡' }, { type: 'PENETRATE', color: '#FF4500', label: '貫' }, { type: 'RAINBOW', color: 'pink', label: '虹' }
+                    ];
+                    items.push({ x: Math.random() * 460 + 20, y: 0, radius: 15, dy: 2, ...types[Math.floor(Math.random() * types.length)] });
+                    lastItemSpawnTime = now; 
+                }
             }
             requestAnimationFrame(draw);
         }
