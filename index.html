@@ -3,144 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ブロック崩しゲーム</title>
+    <title>ゆうすちゃんブロック崩し</title>
     <style>
-        body {
-            background-color: #222;
-            color: white;
-            text-align: center;
-            font-family: sans-serif;
-            margin: 0;
-            padding: 20px;
-        }
-        canvas {
-            background-color: #000;
-            border: 2px solid #555;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            max-width: 100%;
-            height: auto;
-            display: block;
-            margin: 0 auto;
-        }
-        #instructions {
-            margin-bottom: 15px;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        .highlight {
-            color: #00FFFF;
-            font-weight: bold;
-        }
+        body { background-color: #222; color: white; text-align: center; font-family: sans-serif; margin: 0; padding: 20px; }
+        canvas { background-color: #000; border: 2px solid #555; box-shadow: 0 0 10px rgba(0,0,0,0.5); display: block; margin: 0 auto; cursor: none; }
+        #restartBtn { display: none; position: absolute; top: 550px; left: 50%; transform: translateX(-50%); padding: 10px 20px; font-size: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
-
-    <h1>ブロック崩し</h1>
-    <div id="instructions">
-        【操作方法】<br>
-        左に移動: <span class="highlight">← キー</span> または <span class="highlight">A キー</span><br>
-        右に移動: <span class="highlight">→ キー</span> または <span class="highlight">D キー</span><br>
-        <br>
-        残機: <span id="lives" style="color: #FF69B4; font-size: 18px; font-weight: bold;">3</span>
-    </div>
-    
-    <canvas id="gameCanvas" width="500" height="600"></canvas>
+    <h1>ゆうすちゃんブロック崩し</h1>
+    <canvas id="gameCanvas" width="500" height="700"></canvas>
+    <button id="restartBtn">やり直す</button>
 
     <script>
-        console.log("----- スクリプト実行開始 -----");
-
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-        const livesDisplay = document.getElementById("lives");
+        const btn = document.getElementById("restartBtn");
 
-        let lives = 3;
-        let gameState = "START";
+        const img1 = new Image(); img2 = new Image(); img3 = new Image();
+        img1.src = 'img_01.png'; img2.src = 'img_02.png'; img3.src = 'img_03.png';
 
-        // ==========================================
-        // 画像の読み込みとエラーチェック
-        // ==========================================
-        const img1 = new Image();
-        img1.onload = () => console.log("✅ img_01.png 読み込み成功");
-        img1.onerror = () => console.error("❌ img_01.png 読み込み失敗");
-        img1.src = 'img_01.png';
+        let lives, gameState, paddle, balls, blocks, items, activeBlocks, lastItemSpawnTime, effects;
+        const paddleBaseWidth = 90;
 
-        const img2 = new Image();
-        img2.onload = () => console.log("✅ img_02.png 読み込み成功");
-        img2.onerror = () => console.error("❌ img_02.png 読み込み失敗");
-        img2.src = 'img_02.png';
+        function initBall() { balls = [{ x: 250, y: 650, radius: 7, dx: 1.5, dy: -1.5 }]; }
 
-        const img3 = new Image();
-        img3.onload = () => console.log("✅ img_03.png 読み込み成功");
-        img3.onerror = () => console.error("❌ img_03.png 読み込み失敗");
-        img3.src = 'img_03.png';
-
-        // ==========================================
-        // ゲーム変数の設定
-        // ==========================================
-        const paddle = { height: 12, width: 90, x: (canvas.width - 90) / 2, y: canvas.height - 30, dx: 7 };
-        const ball = { x: canvas.width / 2, y: canvas.height - 50, radius: 7, dx: 3, dy: -3 };
-
-        const blockRowCount = 8;
-        const blockColumnCount = 7;
-        const blockWidth = 60;
-        const blockHeight = 35;
-        const blockPadding = 3;
-        const blockOffsetTop = 160;
-        const blockOffsetLeft = 32;
-
-        let blocks = [];
-        for(let c=0; c<blockColumnCount; c++) {
-            blocks[c] = [];
-            for(let r=0; r<blockRowCount; r++) {
-                blocks[c][r] = { x: 0, y: 0, status: 1 };
-            }
-        }
-
-        let rightPressed = false;
-        let leftPressed = false;
-
-        document.addEventListener("keydown", (e) => {
-            if(e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = true;
-            else if(e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = true;
+        function resetGame() {
+            lives = 2; gameState = "START";
+            paddle = { height: 12, width: paddleBaseWidth, x: 205, y: 670, dx: 7 };
+            initBall();
+            items = []; lastItemSpawnTime = Date.now();
+            effects = { expandEndTime: 0, penetrateEndTime: 0, rainbowEndTime: 0 };
             
-            if(gameState === "START" && (rightPressed || leftPressed)) gameState = "PLAYING";
-        });
-
-        document.addEventListener("keyup", (e) => {
-            if(e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = false;
-            else if(e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = false;
-        });
-
-        // ==========================================
-        // 描画・ゲームロジック
-        // ==========================================
-        function drawBlocks() {
-            for(let c=0; c<blockColumnCount; c++) {
-                for(let r=0; r<blockRowCount; r++) {
-                    if(blocks[c][r].status === 1) {
-                        let blockX = (c * (blockWidth + blockPadding)) + blockOffsetLeft;
-                        let blockY = (r * (blockHeight + blockPadding)) + blockOffsetTop;
-                        blocks[c][r].x = blockX;
-                        blocks[c][r].y = blockY;
-
-                        // 画像が正常に読み込まれている場合のみ切り取って描画
-                        if(img1.complete && img1.naturalWidth > 0) {
-                            ctx.drawImage(img1, blockX, blockY, blockWidth, blockHeight, blockX, blockY, blockWidth, blockHeight);
-                        }
-                        ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-                        ctx.lineWidth = 1;
-                        ctx.strokeRect(blockX, blockY, blockWidth, blockHeight);
-                    }
-                }
+            blocks = []; activeBlocks = 0;
+            for(let c=0; c<14; c++) {
+                blocks[c] = [];
+                for(let r=0; r<20; r++) { blocks[c][r] = { x: c*32+26, y: r*20+150, status: 1 }; activeBlocks++; }
             }
+            btn.style.display = "none";
+        }
+        resetGame();
+
+        function spawnItem() {
+            const types = [
+                { type: 'MULTIPLY', color: '#00BFFF', label: '倍' }, { type: 'MULTIPLY', color: '#00BFFF', label: '倍' },
+                { type: 'EXPAND', color: '#32CD32', label: '拡' }, { type: 'PENETRATE', color: '#FF4500', label: '貫' }, { type: 'RAINBOW', color: 'pink', label: '虹' }
+            ];
+            items.push({ x: Math.random() * 460 + 20, y: 0, radius: 15, dy: 2, ...types[Math.floor(Math.random() * types.length)] });
         }
 
-        function drawBall() {
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
-            ctx.fillStyle = "#FF69B4";
-            ctx.fill();
-            ctx.closePath();
-        }
+        let keys = { left: false, right: false };
+        document.addEventListener("keydown", (e) => {
+            if(e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = true;
+            if(e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = true;
+            if(gameState === "START" && (keys.right || keys.left)) { gameState = "PLAYING"; lastItemSpawnTime = Date.now(); }
+        });
+        document.addEventListener("keyup", (e) => {
+            if(e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = false;
+            if(e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = false;
+        });
+        btn.onclick = resetGame;
 
-        function drawPaddle
+        function draw() {
+            ctx.clearRect(0, 0, 500, 700);
+            let now = Date.now();
+
+            ctx.drawImage(img1, 0, 0, 500, 600);
+            blocks.forEach(col => col.forEach(b => {
+                if(b.status) { ctx.lineWidth=1; ctx.strokeStyle="rgba(255,255,255,0.4)"; ctx.strokeRect(b.x, b.y, 32, 20); }
+                else { ctx.save(); ctx.beginPath(); ctx.rect(b.x, b.y, 32, 20); ctx.clip(); ctx.drawImage(img2, 0, 0, 500, 600); ctx.restore(); }
+            }));
+
+            if(activeBlocks <= 0) gameState = "CLEAR";
+
+            if(gameState === "GAMEOVER" || gameState === "CLEAR") {
+                if(gameState === "GAMEOVER") { ctx.drawImage(img3, 0, 0, 500, 600); ctx.fillStyle="red"; }
+                else { ctx.drawImage(img2, 0, 0, 500, 600); ctx.fillStyle="yellow"; }
+                ctx.font = "bold 40px sans-serif"; ctx.textAlign = "center";
+                ctx.fillText(gameState === "GAMEOVER" ? "GAME OVER" : "GAME CLEAR!", 250, 350);
+                btn.style.display = "block";
+            } else {
+                let isExpanding = now < effects.expandEndTime;
+                paddle.width = isExpanding ? paddleBaseWidth * 1.5 : paddleBaseWidth;
+                ctx.fillStyle = isExpanding ? "#32CD32" : "#00FFFF";
+                ctx.fillRect(paddle.x, paddle.y, paddle.width, paddle.height);
+                if(isExpanding && (effects.expandEndTime - now < 5000) && (Math.floor(now / 150) % 2 === 0)) {
+                    ctx.fillStyle = "white"; ctx.fillRect(paddle.x, paddle.y, 15, paddle.height); ctx.fillRect(paddle.x + paddle.width - 15, paddle.y, 15, paddle.height);
+                }
+
+                items.forEach((it, i) => {
+                    if(gameState==="PLAYING") it.y += it.dy;
+                    ctx.beginPath(); ctx.arc(it.x, it.y, it.radius, 0, Math.PI*2);
+                    ctx.fillStyle = it.type === 'RAINBOW' ? `hsl(${(now/10)%360},100%,50%)` : it.color;
+                    ctx.fill(); ctx.fillStyle="white"; ctx.textAlign="center"; ctx.fillText(it.label, it.x, it.y+5);
+                    
+                    // 修正：パドルとの衝突判定をより厳密に
+                    if(it.y + it.radius >= paddle.y && it.x >= paddle.x && it.x <= paddle.x + paddle.width) {
+                        if(it.type === 'MULTIPLY') balls.forEach(b => balls.push({x:b.x, y:b.y, radius:7, dx:-b.dx, dy:b.dy}));
+                        else if(it.type === 'EXPAND') effects.expandEndTime = now + 60000;
+                        else if(it.type === 'PENETRATE') effects.penetrateEndTime = now + 30000;
+                        else if(it.type === 'RAINBOW') effects.rainbowEndTime = now + 60000;
+                        items.splice(i, 1);
+                    } else if(it.y > 700) items.splice(i, 1);
+                });
+
+                balls.forEach((b, i) => {
+                    if(gameState==="PLAYING") {
+                        b.x += b.dx; b.y += b.dy;
+                        if(b.x < 7 || b.x > 493) b.dx *= -1;
+                        if(b.y < 7) b.dy *= -1;
+                        if(b.y > paddle.y - 7 && b.x > paddle.x && b.x < paddle.x + paddle.width) { b.dy = -Math.abs(b.dy); b.y = paddle.y - 7; }
+                        else if(b.y > 700) { balls.splice(i, 1); if(balls.length === 0) { lives--; gameState = lives < 0 ? "GAMEOVER" : "START"; initBall(); } }
+                        blocks.forEach(col => col.forEach(bl => {
+                            if(bl.status && Math.hypot(b.x-(bl.x+16), b.y-(bl.y+10)) < 18) {
+                                bl.status=0; activeBlocks--; if(now > effects.penetrateEndTime) b.dy *= -1;
+                            }
+                        }));
+                    }
+                    ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+                    ctx.fillStyle = (now < effects.rainbowEndTime) ? `hsl(${(now/5)%360},100%,60%)` : (now < effects.penetrateEndTime ? "#FF4500" : "#FF69B4");
+                    ctx.fill();
+                    if(now < effects.penetrateEndTime) { ctx.lineWidth=2; ctx.strokeStyle="white"; ctx.stroke(); }
+                });
+
+                ctx.font = "bold 20px sans-serif"; ctx.fillStyle = "white"; ctx.textAlign = "left";
+                ctx.fillText("HP: " + lives, 20, 30); ctx.textAlign = "right";
+                ctx.fillText("残りブロック: " + activeBlocks, 480, 30);
+                
+                if(keys.right && paddle.x < 500-paddle.width) paddle.x += paddle.dx;
+                if(keys.left && paddle.x > 0) paddle.x -= paddle.dx;
+                if(gameState==="PLAYING" && now - lastItemSpawnTime > 20000) { spawnItem(); lastItemSpawnTime = now; }
+            }
+            requestAnimationFrame(draw);
+        }
+        draw();
+    </script>
+</body>
+</html>
