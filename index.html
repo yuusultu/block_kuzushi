@@ -51,55 +51,55 @@
         const ctx = canvas.getContext("2d");
         const livesDisplay = document.getElementById("lives");
 
+        // ローディング表示（画像読み込み中）
+        ctx.font = "bold 24px sans-serif";
+        ctx.fillStyle = "white";
+        ctx.textAlign = "center";
+        ctx.fillText("Now Loading...", canvas.width / 2, canvas.height / 2);
+        ctx.font = "14px sans-serif";
+        ctx.fillText("※画像サイズが大きい場合、少し時間がかかります", canvas.width / 2, canvas.height / 2 + 30);
+
         // ==========================================
-        // 1. 画像の読み込み（すべてPNG形式に対応）
+        // 1. 画像の読み込み処理
         // ==========================================
-        const img1 = new Image(); 
-        img1.src = 'img_01.png'; // 1枚目：初期状態（衣装がブロックになる）
-        
-        const img2 = new Image(); 
-        img2.src = 'img_02.png'; // 2枚目：差分（背景として露出する）
-        
-        const img3 = new Image(); 
-        img3.png = 'img_03.png'; // 3枚目：失敗時の顔（顔部分に上書き）
-        // ※3枚目の読み込み用
-        const img3Actual = new Image();
-        img3Actual.src = 'img_03.png';
+        const img1 = new Image();
+        const img2 = new Image();
+        const img3 = new Image();
+
+        let imagesLoaded = 0;
+        // 3枚すべての読み込みが終わったらゲームの準備を開始する
+        function onImageLoad() {
+            imagesLoaded++;
+            if(imagesLoaded === 3) {
+                draw(); // ゲームループ開始
+            }
+        }
+
+        img1.onload = onImageLoad;
+        img2.onload = onImageLoad;
+        img3.onload = onImageLoad;
+
+        img1.src = 'img_01.png'; // 1枚目（服がブロックになる）
+        img2.src = 'img_02.png'; // 2枚目（差分・背景）
+        img3.src = 'img_03.png'; // 3枚目（失敗時の顔）
 
         // ==========================================
         // 2. ゲーム変数の設定
         // ==========================================
         let lives = 3;
-        let gameState = "START"; // START, PLAYING, GAMEOVER, CLEAR
+        let gameState = "START"; 
         
-        // パドルの設定
-        const paddle = {
-            height: 12,
-            width: 90,
-            x: (canvas.width - 90) / 2,
-            y: canvas.height - 30,
-            dx: 7
-        };
+        const paddle = { height: 12, width: 90, x: (canvas.width - 90) / 2, y: canvas.height - 30, dx: 7 };
+        const ball = { x: canvas.width / 2, y: canvas.height - 50, radius: 7, dx: 3, dy: -3 };
 
-        // ボールの設定（10分ほどでまったり遊べる速さに調整）
-        const ball = {
-            x: canvas.width / 2,
-            y: canvas.height - 50,
-            radius: 7,
-            dx: 3,
-            dy: -3
-        };
-
-        // ブロックの設定（衣装の配置に合わせた標準的なグリッド）
         const blockRowCount = 8;
         const blockColumnCount = 7;
         const blockWidth = 60;
         const blockHeight = 35;
         const blockPadding = 3;
-        const blockOffsetTop = 160;  // 衣装がある位置（Y座標）
-        const blockOffsetLeft = 32; // 左右の余白
+        const blockOffsetTop = 160;  
+        const blockOffsetLeft = 32; 
 
-        // ブロック配列の初期化
         let blocks = [];
         for(let c=0; c<blockColumnCount; c++) {
             blocks[c] = [];
@@ -108,39 +108,29 @@
             }
         }
 
-        // キーボード入力の状態管理
         let rightPressed = false;
         let leftPressed = false;
 
         document.addEventListener("keydown", (e) => {
-            if(e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
-                rightPressed = true;
-            }
-            else if(e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
-                leftPressed = true;
-            }
-            
-            // START画面でキーを押したらゲーム開始
-            if(gameState === "START" && (rightPressed || leftPressed)) {
-                gameState = "PLAYING";
-            }
+            if(e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = true;
+            else if(e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = true;
+            if(gameState === "START" && (rightPressed || leftPressed)) gameState = "PLAYING";
         });
 
         document.addEventListener("keyup", (e) => {
-            if(e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
-                rightPressed = false;
-            }
-            else if(e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
-                leftPressed = false;
-            }
+            if(e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = false;
+            else if(e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = false;
         });
 
         // ==========================================
         // 3. 描画・ゲームロジック
         // ==========================================
 
-        // ブロックの描画（1枚目の画像から切り出す）
         function drawBlocks() {
+            // ★超重要：元画像の巨大な解像度をキャンバスサイズに合わせる比率
+            const scaleX = img1.width / canvas.width;
+            const scaleY = img1.height / canvas.height;
+
             for(let c=0; c<blockColumnCount; c++) {
                 for(let r=0; r<blockRowCount; r++) {
                     if(blocks[c][r].status === 1) {
@@ -149,13 +139,28 @@
                         blocks[c][r].x = blockX;
                         blocks[c][r].y = blockY;
 
-                        // 1枚目の画像からブロックの範囲を切り取って描画
+                        // 巨大な元画像から、適切な比率の座標を切り取って描画する
                         ctx.drawImage(img1, 
-                            blockX, blockY, blockWidth, blockHeight, // 元画像から切り出す位置とサイズ
-                            blockX, blockY, blockWidth, blockHeight  // キャンバスに描画する位置とサイズ
+                            blockX * scaleX, blockY * scaleY, blockWidth * scaleX, blockHeight * scaleY, 
+                            blockX, blockY, blockWidth, blockHeight  
                         );
                         
-                        // ブロックの形を明確にするための白い枠線
                         ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
                         ctx.lineWidth = 1;
-                        ctx.strokeRect
+                        ctx.strokeRect(blockX, blockY, blockWidth, blockHeight);
+                    }
+                }
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+            ctx.fillStyle = "#FF69B4"; 
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddle.x, paddle.y,
