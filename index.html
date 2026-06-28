@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ゆうすちゃん ブロック崩し</title>
+    <title>ブロック崩しゲーム</title>
     <style>
         body {
             background-color: #222;
@@ -35,7 +35,7 @@
 </head>
 <body>
 
-    <h1>ゆうすちゃん ブロック崩し</h1>
+    <h1>ブロック崩し</h1>
     <div id="instructions">
         【操作方法】<br>
         左に移動: <span class="highlight">← キー</span> または <span class="highlight">A キー</span><br>
@@ -47,48 +47,36 @@
     <canvas id="gameCanvas" width="500" height="600"></canvas>
 
     <script>
+        console.log("----- スクリプト実行開始 -----");
+
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
         const livesDisplay = document.getElementById("lives");
 
-        // ローディング表示（画像読み込み中）
-        ctx.font = "bold 24px sans-serif";
-        ctx.fillStyle = "white";
-        ctx.textAlign = "center";
-        ctx.fillText("Now Loading...", canvas.width / 2, canvas.height / 2);
-        ctx.font = "14px sans-serif";
-        ctx.fillText("※画像サイズが大きい場合、少し時間がかかります", canvas.width / 2, canvas.height / 2 + 30);
+        let lives = 3;
+        let gameState = "START";
 
         // ==========================================
-        // 1. 画像の読み込み処理
+        // 画像の読み込みとエラーチェック
         // ==========================================
         const img1 = new Image();
+        img1.onload = () => console.log("✅ img_01.png 読み込み成功");
+        img1.onerror = () => console.error("❌ img_01.png 読み込み失敗");
+        img1.src = 'img_01.png';
+
         const img2 = new Image();
+        img2.onload = () => console.log("✅ img_02.png 読み込み成功");
+        img2.onerror = () => console.error("❌ img_02.png 読み込み失敗");
+        img2.src = 'img_02.png';
+
         const img3 = new Image();
-
-        let imagesLoaded = 0;
-        // 3枚すべての読み込みが終わったらゲームの準備を開始する
-        function onImageLoad() {
-            imagesLoaded++;
-            if(imagesLoaded === 3) {
-                draw(); // ゲームループ開始
-            }
-        }
-
-        img1.onload = onImageLoad;
-        img2.onload = onImageLoad;
-        img3.onload = onImageLoad;
-
-        img1.src = 'img_01.png'; // 1枚目（服がブロックになる）
-        img2.src = 'img_02.png'; // 2枚目（差分・背景）
-        img3.src = 'img_03.png'; // 3枚目（失敗時の顔）
+        img3.onload = () => console.log("✅ img_03.png 読み込み成功");
+        img3.onerror = () => console.error("❌ img_03.png 読み込み失敗");
+        img3.src = 'img_03.png';
 
         // ==========================================
-        // 2. ゲーム変数の設定
+        // ゲーム変数の設定
         // ==========================================
-        let lives = 3;
-        let gameState = "START"; 
-        
         const paddle = { height: 12, width: 90, x: (canvas.width - 90) / 2, y: canvas.height - 30, dx: 7 };
         const ball = { x: canvas.width / 2, y: canvas.height - 50, radius: 7, dx: 3, dy: -3 };
 
@@ -97,8 +85,8 @@
         const blockWidth = 60;
         const blockHeight = 35;
         const blockPadding = 3;
-        const blockOffsetTop = 160;  
-        const blockOffsetLeft = 32; 
+        const blockOffsetTop = 160;
+        const blockOffsetLeft = 32;
 
         let blocks = [];
         for(let c=0; c<blockColumnCount; c++) {
@@ -114,6 +102,7 @@
         document.addEventListener("keydown", (e) => {
             if(e.key === "Right" || e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightPressed = true;
             else if(e.key === "Left" || e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftPressed = true;
+            
             if(gameState === "START" && (rightPressed || leftPressed)) gameState = "PLAYING";
         });
 
@@ -123,14 +112,9 @@
         });
 
         // ==========================================
-        // 3. 描画・ゲームロジック
+        // 描画・ゲームロジック
         // ==========================================
-
         function drawBlocks() {
-            // ★超重要：元画像の巨大な解像度をキャンバスサイズに合わせる比率
-            const scaleX = img1.width / canvas.width;
-            const scaleY = img1.height / canvas.height;
-
             for(let c=0; c<blockColumnCount; c++) {
                 for(let r=0; r<blockRowCount; r++) {
                     if(blocks[c][r].status === 1) {
@@ -139,12 +123,10 @@
                         blocks[c][r].x = blockX;
                         blocks[c][r].y = blockY;
 
-                        // 巨大な元画像から、適切な比率の座標を切り取って描画する
-                        ctx.drawImage(img1, 
-                            blockX * scaleX, blockY * scaleY, blockWidth * scaleX, blockHeight * scaleY, 
-                            blockX, blockY, blockWidth, blockHeight  
-                        );
-                        
+                        // 画像が正常に読み込まれている場合のみ切り取って描画
+                        if(img1.complete && img1.naturalWidth > 0) {
+                            ctx.drawImage(img1, blockX, blockY, blockWidth, blockHeight, blockX, blockY, blockWidth, blockHeight);
+                        }
                         ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
                         ctx.lineWidth = 1;
                         ctx.strokeRect(blockX, blockY, blockWidth, blockHeight);
@@ -156,11 +138,9 @@
         function drawBall() {
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
-            ctx.fillStyle = "#FF69B4"; 
+            ctx.fillStyle = "#FF69B4";
             ctx.fill();
             ctx.closePath();
         }
 
-        function drawPaddle() {
-            ctx.beginPath();
-            ctx.rect(paddle.x, paddle.y,
+        function drawPaddle
